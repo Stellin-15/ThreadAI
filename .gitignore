@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Editor/OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+
+# Never commit a real vault file
+*.dat
+
+CLAUDE.md
