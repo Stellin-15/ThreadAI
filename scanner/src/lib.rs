@@ -36,7 +36,8 @@ pub fn scan_path(root: &Path, rules: &[Rule], min_severity: Severity) -> Result<
         } else {
             path.as_path()
         };
-        let label = shown.to_string_lossy().replace('\\', "/");
+        // File names come from the scanned repo too, so they get the same treatment.
+        let label = matcher::sanitize_for_terminal(&shown.to_string_lossy().replace('\\', "/"));
 
         result.findings.extend(
             matcher::scan_text(rules, lang, &label, &text)

@@ -156,12 +156,31 @@ pub fn redact(matched: &str) -> String {
 
 fn tidy_snippet(line: &str) -> String {
     let trimmed = line.trim();
-    if trimmed.chars().count() > MAX_SNIPPET_CHARS {
+    let shown = if trimmed.chars().count() > MAX_SNIPPET_CHARS {
         let cut: String = trimmed.chars().take(MAX_SNIPPET_CHARS).collect();
         format!("{cut}…")
     } else {
         trimmed.to_string()
+    };
+    sanitize_for_terminal(&shown)
+}
+
+/// Scanned files are untrusted. Make control characters (ANSI escape codes
+/// that could rewrite the terminal and hide findings) and Unicode bidi
+/// overrides ("Trojan Source", CVE-2021-42574) visible instead of active.
+pub fn sanitize_for_terminal(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        let bidi = matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}');
+        if c == '\t' {
+            out.push(' ');
+        } else if c.is_control() || bidi {
+            out.extend(c.escape_unicode());
+        } else {
+            out.push(c);
+        }
     }
+    out
 }
 
 #[cfg(test)]
@@ -280,6 +299,17 @@ mod tests {
             1
         );
         assert!(scan_text(&rules, Language::Rust, "tests/cli.rs", line).is_empty());
+    }
+
+    #[test]
+    fn terminal_escapes_are_neutralised() {
+        let rules = load_builtin().unwrap();
+        let line = "x = pickle.loads(d)  # \u{1b}[2K\u{1b}[1Alooks fine \u{202E}evil";
+        let f = scan_text(&rules, Language::Python, "t", line);
+        assert!(!f[0].snippet.contains('\u{1b}'));
+        assert!(!f[0].snippet.contains('\u{202E}'));
+        assert!(f[0].snippet.contains(r"\u{1b}[2K"));
+        assert!(f[0].snippet.contains(r"\u{202e}"));
     }
 
     #[test]
