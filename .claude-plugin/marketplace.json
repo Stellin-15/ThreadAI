@@ -1,0 +1,19 @@
+{
+  "name": "threadai",
+  "owner": {
+    "name": "Stellin",
+    "url": "https://github.com/Stellin-15"
+  },
+  "metadata": {
+    "description": "ThreadAI security tooling for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "threadai",
+      "source": "./plugin",
+      "description": "Security audit from an attacker's and security architect's view: threat model, vulnerability checklist and concrete fixes for JS/TS, Python and Rust.",
+      "version": "0.1.0",
+      "category": "security"
+    }
+  ]
+}

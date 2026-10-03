@@ -1,0 +1,13 @@
+{
+  "name": "threadai",
+  "version": "0.1.0",
+  "description": "Security audit from an attacker's and security architect's view: threat model, vulnerability checklist (OWASP Top 10, secrets, injection, auth, crypto) for JS/TS, Python and Rust, with concrete fixes.",
+  "author": {
+    "name": "Stellin",
+    "url": "https://github.com/Stellin-15"
+  },
+  "homepage": "https://github.com/Stellin-15/ThreadAI",
+  "repository": "https://github.com/Stellin-15/ThreadAI",
+  "license": "MIT",
+  "keywords": ["security", "audit", "owasp", "vulnerability", "threat-model", "secrets", "sast"]
+}
