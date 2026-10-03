@@ -1,0 +1,40 @@
+name: ThreadAI security scan
+description: Scan your code for vulnerability patterns and leaked secrets (JS/TS, Python, Rust, config). Fails the job on findings.
+author: Stellin
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  path:
+    description: File or directory to scan
+    default: "."
+  min-severity:
+    description: Report and fail on findings at or above this level (info, low, medium, high, critical)
+    default: "medium"
+  sarif:
+    description: Also write threadai.sarif so you can upload it to GitHub code scanning
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    # Builds the scanner from this action's own checkout, so the version
+    # always matches the ref you pinned in `uses:`.
+    - name: Install threadai
+      shell: bash
+      run: cargo install --locked --quiet --path "$GITHUB_ACTION_PATH/scanner"
+
+    # Inputs go through env vars, never straight into the script, so a
+    # crafted input can't inject shell commands.
+    - name: Scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        MIN_SEVERITY: ${{ inputs.min-severity }}
+        WANT_SARIF: ${{ inputs.sarif }}
+      run: |
+        if [ "$WANT_SARIF" = "true" ]; then
+          threadai scan "$SCAN_PATH" --min-severity "$MIN_SEVERITY" --format sarif --output threadai.sarif || true
+        fi
+        threadai scan "$SCAN_PATH" --min-severity "$MIN_SEVERITY"
