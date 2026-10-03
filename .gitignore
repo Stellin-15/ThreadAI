@@ -1,4 +1,5 @@
-/target
+# Rust build output
+target/
 **/*.rs.bk
 *.pdb
 
@@ -9,7 +10,9 @@
 .DS_Store
 Thumbs.db
 
-# Never commit a real vault file
-*.dat
-
+# Local-only Claude notes
 CLAUDE.md
+
+# Scanner reports people generate locally
+*.sarif
+threadai-report.*
