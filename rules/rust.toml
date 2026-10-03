@@ -1,0 +1,58 @@
+# ThreadAI rules — Rust. Schema: see core.toml.
+
+[[rule]]
+id = "TAI-RS-001"
+title = "unsafe code block — needs manual review"
+severity = "low"
+cwe = "CWE-119"
+owasp = ""
+languages = ["rust"]
+pattern = '''\bunsafe\s*(\{|fn\b|impl\b)'''
+attack = "One mistake inside unsafe (out-of-bounds, use-after-free, aliasing) is memory corruption, potentially code execution."
+fix = "Prefer a safe abstraction; otherwise keep the block tiny and document the invariants in a // SAFETY: comment. Run cargo miri test."
+
+[[rule]]
+id = "TAI-RS-002"
+title = "Panic on untrusted parsing (.unwrap()/.expect() after parse)"
+severity = "low"
+cwe = "CWE-248"
+owasp = ""
+languages = ["rust"]
+pattern = '''(\.parse(::<[^>]+>)?\(\)\s*\.(unwrap|expect)\(|\bfrom_(str|slice|reader|value)\([^)]*\)\s*\.(unwrap|expect)\()'''
+skip_in_tests = true
+attack = "Malformed input crashes the process — a trivial denial of service for servers."
+fix = "Propagate the error with ? and return a clear error to the caller (e.g. anyhow::Context)."
+
+[[rule]]
+id = "TAI-RS-003"
+title = "Non-cryptographic or seeded RNG used for a security value"
+severity = "medium"
+cwe = "CWE-338"
+owasp = "A02:2021"
+languages = ["rust"]
+pattern = '''(?i)((key|secret|token|nonce|salt|password|iv)\w*.*\b(SmallRng|seed_from_u64|fastrand::|oorandom)|\b(SmallRng|seed_from_u64|fastrand::|oorandom).*(key|secret|token|nonce|salt|password))'''
+attack = "Seeded/fast RNGs are predictable; an attacker reproduces the key or nonce."
+fix = "Use OsRng (rand::rngs::OsRng) or rand::thread_rng() (ChaCha-based CSPRNG) for anything secret."
+
+[[rule]]
+id = "TAI-RS-004"
+title = "Command executed through a shell"
+severity = "high"
+cwe = "CWE-78"
+owasp = "A03:2021"
+languages = ["rust"]
+pattern = '''Command::new\(\s*"(sh|bash|zsh|cmd|cmd\.exe|powershell|pwsh)"'''
+attack = "Passing a formatted string to sh -c / cmd /C makes every interpolated value a command-injection point."
+fix = "Call the program directly: Command::new(\"git\").args([\"clone\", &url]) — arguments are never shell-parsed."
+
+[[rule]]
+id = "TAI-RS-005"
+title = "Hardcoded cryptographic key / nonce bytes"
+severity = "high"
+cwe = "CWE-321"
+owasp = "A02:2021"
+languages = ["rust"]
+pattern = '''(?i)(\b\w*(key|secret|nonce|iv)\w*\s*(:\s*[^=]+)?=\s*(&?b"[^"]{8,}"|&?\[\s*0x[0-9a-f]{2}\s*,)|from_slice\(\s*b"[^"]{8,}")'''
+redact = true
+attack = "A key in the binary can be extracted with `strings`; a fixed nonce with AES-GCM destroys confidentiality and authenticity."
+fix = "Derive keys at runtime (Argon2id from a password, or load from a keystore) and generate a fresh random nonce per encryption."

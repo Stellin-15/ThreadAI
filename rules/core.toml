@@ -1,0 +1,165 @@
+# ThreadAI rules — language-agnostic core.
+#
+# Schema (shared by every rules/*.toml file):
+#   id         unique, prefix matches the file: TAI-CORE / TAI-JS / TAI-PY / TAI-RS
+#   title      one-line name of the weakness
+#   severity   critical | high | medium | low | info
+#   cwe        CWE identifier
+#   owasp      OWASP Top 10 (2021) category, "" if none fits
+#   languages  ["any"] or a subset of ["javascript", "python", "rust"]
+#   pattern    Rust-regex, matched against one line at a time
+#   exclude    optional Rust-regex; if it matches the same line, the finding is dropped
+#   redact     optional bool; mask the matched text in reports (use for secrets)
+#   skip_in_tests  optional bool; don't report in test files (tests/, test_*.py, *.test.ts, ...)
+#   attack     how an attacker abuses it
+#   fix        what to do instead
+
+[[rule]]
+id = "TAI-CORE-001"
+title = "AWS access key ID committed to source"
+severity = "critical"
+cwe = "CWE-798"
+owasp = "A07:2021"
+languages = ["any"]
+pattern = '''\b(AKIA|ASIA)[0-9A-Z]{16}\b'''
+redact = true
+attack = "Anyone with repo access (or a leaked copy) can call AWS APIs as this identity. Bots scrape public repos for these within minutes."
+fix = "Revoke the key in IAM now, then load credentials from the environment, an AWS profile, or a secrets manager. Rewrite git history if it was pushed."
+
+[[rule]]
+id = "TAI-CORE-002"
+title = "Private key embedded in source"
+severity = "critical"
+cwe = "CWE-321"
+owasp = "A02:2021"
+languages = ["any"]
+pattern = '''-----BEGIN (RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY'''
+redact = true
+attack = "The key lets an attacker impersonate the server/user, decrypt traffic, or sign malicious artifacts."
+fix = "Remove the key, rotate it, and load it at runtime from a file outside the repo or a secrets manager."
+
+[[rule]]
+id = "TAI-CORE-003"
+title = "Hardcoded password, secret or API key"
+severity = "high"
+cwe = "CWE-798"
+owasp = "A07:2021"
+languages = ["any"]
+pattern = '''(?i)\b\w*(password|passwd|pwd|secret|api_?key|access_?token|auth_?token|private_?key)\w*\b["']?\s*[:=]\s*["'][^"'\s]{6,}["']'''
+exclude = '''(?i)(example|changeme|change_me|placeholder|your[_-]|xxxx|<[a-z_]+>|\$\{|process\.env|os\.environ|getenv|env::var|dummy|redacted)'''
+redact = true
+attack = "Secrets in source end up in every clone, fork, CI log and backup. One leak exposes every environment using that value."
+fix = "Read the value from an environment variable or secrets manager; rotate the exposed secret."
+
+[[rule]]
+id = "TAI-CORE-004"
+title = "GitHub token committed to source"
+severity = "critical"
+cwe = "CWE-798"
+owasp = "A07:2021"
+languages = ["any"]
+pattern = '''\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})\b'''
+redact = true
+attack = "Grants repo/org access as the token owner — attacker can push code, read private repos, or poison CI."
+fix = "Revoke the token in GitHub settings immediately; use GITHUB_TOKEN in Actions or an env var locally."
+
+[[rule]]
+id = "TAI-CORE-005"
+title = "Slack token committed to source"
+severity = "high"
+cwe = "CWE-798"
+owasp = "A07:2021"
+languages = ["any"]
+pattern = '''\bxox[abprs]-[A-Za-z0-9-]{10,}'''
+redact = true
+attack = "Lets an attacker read channels, exfiltrate messages, or post phishing messages as the bot/user."
+fix = "Revoke the token in Slack app settings and load it from the environment."
+
+[[rule]]
+id = "TAI-CORE-006"
+title = "Weak hash algorithm (MD5/SHA-1)"
+severity = "medium"
+cwe = "CWE-327"
+owasp = "A02:2021"
+languages = ["any"]
+pattern = '''(?i)(hashlib\.(md5|sha1)\s*\(|createHash\(\s*['"](md5|sha1)['"]|\bmd5::compute\s*\(|\bSha1::new\s*\(|\bMessageDigest\.getInstance\(\s*"(MD5|SHA-?1)"|\b(md5|sha1)\s*\()'''
+attack = "MD5/SHA-1 are broken for collision resistance and far too fast for passwords — GPUs crack billions of guesses per second."
+fix = "Passwords: Argon2id, scrypt or bcrypt. Integrity/signatures: SHA-256 or better. Non-security checksums are fine — suppress with a threadai-ignore comment."
+
+[[rule]]
+id = "TAI-CORE-007"
+title = "Dynamic code evaluation with eval()"
+severity = "high"
+cwe = "CWE-95"
+owasp = "A03:2021"
+languages = ["javascript", "python"]
+pattern = '''(^|[^.\w])eval\s*\('''
+attack = "If any part of the string reaches user input, the attacker runs arbitrary code in your process."
+fix = "Parse data with JSON.parse / json.loads / ast.literal_eval, or dispatch through an explicit lookup table."
+
+[[rule]]
+id = "TAI-CORE-008"
+title = "TLS certificate verification disabled"
+severity = "high"
+cwe = "CWE-295"
+owasp = "A02:2021"
+languages = ["any"]
+pattern = '''(?i)(rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]?0|\bverify\s*=\s*False\b|InsecureSkipVerify\s*:\s*true|danger_accept_invalid_(certs|hostnames)\s*\(\s*true|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)|ssl\._create_unverified_context|CERT_NONE)'''
+attack = "Anyone on the network path (café Wi-Fi, compromised router, malicious proxy) can man-in-the-middle the connection and read or alter traffic."
+fix = "Keep verification on. For private CAs, pass the CA bundle explicitly (verify='/path/ca.pem', ca: fs.readFileSync(...), add_root_certificate)."
+
+[[rule]]
+id = "TAI-CORE-009"
+title = "Debug mode enabled"
+severity = "medium"
+cwe = "CWE-489"
+owasp = "A05:2021"
+languages = ["any"]
+pattern = '''(?i)(^\s*DEBUG\s*=\s*True\b|\.run\([^)]*debug\s*=\s*True|app\.debug\s*=\s*true)'''
+attack = "Debug pages leak stack traces, settings and secrets; the Werkzeug debugger even gives an interactive Python shell to anyone who can reach it."
+fix = "Drive debug from an environment variable that defaults to off, e.g. DEBUG = os.environ.get('DEBUG') == '1'."
+
+[[rule]]
+id = "TAI-CORE-010"
+title = "SQL query built with string concatenation/interpolation"
+severity = "high"
+cwe = "CWE-89"
+owasp = "A03:2021"
+languages = ["any"]
+pattern = '''(?i)(["'`]\s*(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^"`]*(\$\{|\{[a-z_]|["'`]\s*\+|["'`]\s*%\s|["'`]\s*\.format\()|format!\(\s*"\s*(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[^"]*\{)'''
+attack = "Input like ' OR 1=1 -- or '; DROP TABLE users; -- changes the query itself: auth bypass, data theft, data destruction."
+fix = "Use parameterized queries / prepared statements (cursor.execute(sql, params), db.query('... $1', [v]), sqlx::query!(... ?) with .bind())."
+
+[[rule]]
+id = "TAI-CORE-011"
+title = "Secret compared with a non-constant-time equality check"
+severity = "low"
+cwe = "CWE-208"
+owasp = "A02:2021"
+languages = ["any"]
+pattern = '''(?i)\b\w*(token|secret|hmac|signature|digest|api_?key)\w*\s*(===|!==|==|!=)\s*\w'''
+exclude = '''(?i)(\bnull\b|\bNone\b|\bundefined\b|\bnil\b|len\(|\.len\(\)|\.length\b|is_empty|typeof|isinstance)'''
+attack = "Equality stops at the first differing byte; by timing many requests an attacker can recover the secret byte by byte."
+fix = "Use hmac.compare_digest (Python), crypto.timingSafeEqual (Node), or subtle::ConstantTimeEq / constant_time_eq (Rust)."
+
+[[rule]]
+id = "TAI-CORE-012"
+title = "World-writable file permissions (777/666)"
+severity = "medium"
+cwe = "CWE-732"
+owasp = "A01:2021"
+languages = ["any"]
+pattern = '''((chmod\w*|from_mode|set_mode|\bmode)\s*[:=(]\s*[^)\n]*\b0o?(777|666)\b|chmod\s+(-R\s+)?(777|666)\b)'''
+attack = "Any local user or compromised service can modify the file — swap a script, config or binary and get code execution."
+fix = "Grant the minimum: 0o600 for secrets, 0o644 for readable files, 0o755 for executables/dirs."
+
+[[rule]]
+id = "TAI-CORE-013"
+title = "Secret value written to logs/stdout"
+severity = "low"
+cwe = "CWE-532"
+owasp = "A09:2021"
+languages = ["any"]
+pattern = '''(?i)(println!|eprintln!|info!|debug!|warn!|error!|trace!|dbg!|console\.(log|info|debug|warn|error)|\bprint|logger\.\w+|logging\.\w+|\blog\.\w+)\s*\(.*[{,+]\s*\w*(password|secret|token|api_?key|private_?key)\w*\s*[},)+]'''
+attack = "Logs are shipped to many systems and people; a secret in a log line is a leaked secret."
+fix = "Log an identifier or a redacted form (first 4 chars + '****'), never the secret itself."
