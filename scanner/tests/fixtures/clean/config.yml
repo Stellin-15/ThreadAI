@@ -1,0 +1,6 @@
+# The safe version of vulnerable/config.yml: secrets come from the environment.
+aws:
+  aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+database:
+  host: db.internal
+  db_password: ${DB_PASSWORD}

@@ -1,0 +1,9 @@
+# Intentionally vulnerable sample for ThreadAI tests.
+# The AWS key below is AWS's own documented example value, not a real key.
+aws:
+  # expect: TAI-CORE-001
+  aws_access_key_id: AKIAIOSFODNN7EXAMPLE
+database:
+  host: db.internal
+  # expect: TAI-CORE-003
+  db_password: "Sup3rS3cretPass"

@@ -1,0 +1,4 @@
+# Intentionally vulnerable test samples
+scanner/tests/fixtures/
+# Rule definitions contain the very patterns they describe
+rules/
